@@ -1,0 +1,50 @@
+import numpy as np
+
+class Network():
+    def __init__(self):
+        self.w_1 = np.zeros((65, 20))
+        self.w_2 = np.zeros((21, 64))
+
+        self.init_param(10)
+
+    def init_param(self, sigma):
+        for i in range(len(self.w_1)):
+            for j in range(self.w_1.shape[1]):
+                self.w_1[i][j] = np.random.normal(0, sigma)
+
+        for i in range(len(self.w_2)):
+            for j in range(self.w_2.shape[1]):
+                self.w_2[i][j] = np.random.normal(0, sigma)
+
+    def feedforward(self, x):
+        x = np.append(x, 1.)
+
+        a_1 = np.dot(self.w_1.T, x)
+        z_1 = self.sigmoid(a_1)
+
+        z_1 = np.append(z_1, 1.)
+        a_2 = np.dot(self.w_2.T, z_1)
+
+        return a_2
+
+    def sigmoid(self, a):
+        return 1. / (1. + np.exp(-a))
+
+if __name__ == '__main__':
+    net = Network()
+
+    field_height = 8
+    field_width = 8
+    #盤面の状態を保存（0:なし, -1:黒, 1:白）
+    field = [[0 for i in range(field_width)] for j in range(field_height)]
+
+    #盤面の初期設定
+    field[3][3] = -1
+    field[3][4] = 1
+    field[4][3] = 1
+    field[4][4] = -1
+
+    print(net.w_1)
+    print(net.w_2)
+
+    print(net.feedforward(field))

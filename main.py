@@ -200,7 +200,7 @@ class Player():
                 stdscr.move(26, 0)
                 stdscr.addstr(' '.join(self.que))
                 stdscr.refresh()
-                #time.sleep(5)
+                #time.sleep(1)
                 return self.que.pop()
             else:
                 self.que = self.cpu(field, col)
@@ -282,7 +282,7 @@ if __name__ == '__main__':
     control = Control()
     #Displayクラスのインスタンス生成
     display = Display()
-    player = [Player(), Player(False)]
+    player = [Player(False), Player(False)]
 
     turn = 0
     #カーソルの座標
@@ -326,6 +326,9 @@ if __name__ == '__main__':
 
 
     display.show(field, coor, turn)
+    stdscr.refresh()
+
+    time.sleep(5)
 
     #設定をもとに戻す
     curses.nocbreak()
