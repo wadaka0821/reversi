@@ -11,6 +11,7 @@ class Field():
         self.black = 2
         self.white = 2
 
+        #盤面の初期設定
         self.field[3][3] = -1
         self.field[3][4] = 1
         self.field[4][3] = 1
@@ -19,10 +20,12 @@ class Field():
     #指定された座標の色を変更
     def set_col(self, col, y, x):
         if self.check_coor(y, x):
+            #石の数をカウント
             if col == -1:
                 self.white += 1
             else:
                 self.black += 1
+            #石の色を変更
             self.field[y][x] = col
             return True
         else:
@@ -31,25 +34,30 @@ class Field():
     #指定された座標の色を反転
     def reverse_col(self, y, x):
         if self.check_coor(y, x):
+            #石の数をカウント
             if self.field[y][x] == -1:
                 self.black += 1
                 self.white -= 1
             else:
                 self.black -= 1
                 self.white += 1
+            #石の色を反転
             self.field[y][x] *= -1
             return True
         else:
             return False
     
+    #指定された座標の色を返す
     def get_col(self, y, x):
         if self.check_coor(y, x):
             return self.field[y][x]
         return None
 
+    #黒の石の個数を返す
     def get_black(self):
         return self.black
     
+    #白の石の個数を返す
     def get_white(self):
         return self.white
 
@@ -69,10 +77,14 @@ class Control():
         self.vector = [[-1, -1], [-1, 0], [-1, 1],
                        [0, -1], [0, 0], [0, 1],
                        [1, -1], [1, 0], [1, 1]]
+        #基本のベクトル演算に使用
         self.calc = Math()
         
+    #指定された座標に石を設置
     def set_stone(self, field, col, y, x):
+        #反転させる石がある方向を調べる
         check_list = self.check_reverse(field, col, y, x)
+        #反転させる石があれば石を設置、反転させる
         if field.get_col(y, x) == 0 and sum(check_list):
             field.set_col(col, y, x)
             self.fill(field, check_list, col, y, x)
@@ -80,6 +92,7 @@ class Control():
         else:
             return False
 
+    #反転させる石がある方向を調べる
     def check_reverse(self, field, col, y, x):
         check_list = [0 for i in range(9)]
 
@@ -101,6 +114,7 @@ class Control():
 
         return check_list
 
+    #挟まれた石の反転
     def fill(self, field, check_list, col, y, x):
         coor = [y, x]
     
@@ -112,12 +126,23 @@ class Control():
                 field.reverse_col(temp[0], temp[1])
                 temp = self.calc.plus(temp, self.vector[i])
 
+    #ゲームが終了するか調べる
     def endgame(self, field):
         for i in range(8):
             for j in range(8):
                 if field.get_col(i, j) == 0:
                     return False
         return True
+
+    #プレイヤーの置く場所があるかチェック
+    def check_set(self, field, col):
+        for i in range(8):
+            for j in range(8):
+                if field.get_col(i, j) != 0:
+                    continue
+                if sum(self.check_reverse(field, col, i, j)) > 0:
+                    return True
+        return False
 
 class Display():
     def __init__(self):
@@ -193,20 +218,24 @@ if __name__ == '__main__':
     #キーパッドモードをオン
     stdscr.keypad(True)
 
-
+    #Fieldクラスのインスタンス生成
     field = Field()
+    #Controlクラスのインスタンス生成
     control = Control()
+    #Displayクラスのインスタンス生成
     display = Display()
     player = [Player(), Player()]
-    player1 = Player()
-    player2 = Player()
 
     turn = 0
+    #カーソルの座標
     coor = [0, 0]
 
     display.show(field, coor, turn)
 
     while not control.endgame(field):
+        if not control.check_set(field, turn*2 - 1):
+            turn = (turn + 1) % 2
+            continue
         display.show(field, coor, turn)
         key = player[turn].getkey(field, turn*2 - 1)
         stdscr.move(18, 0)
