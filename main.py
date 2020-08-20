@@ -1,10 +1,14 @@
 import curses
+import copy
+import time
 
 #盤面情報の管理
 class Field():
     def __init__(self):
+        self.field_height = 8
+        self.field_width = 8
         #盤面の状態を保存（0:なし, -1:黒, 1:白）
-        self.field = [[0 for i in range(8)] for j in range(8)]
+        self.field = [[0 for i in range(self.field_width)] for j in range(self.field_height)]
         #現在のターン数をカウント
         self.turn_num = 0
         #黒白それぞれの石の数をカウント
@@ -22,9 +26,9 @@ class Field():
         if self.check_coor(y, x):
             #石の数をカウント
             if col == -1:
-                self.white += 1
-            else:
                 self.black += 1
+            else:
+                self.white += 1
             #石の色を変更
             self.field[y][x] = col
             return True
@@ -36,11 +40,11 @@ class Field():
         if self.check_coor(y, x):
             #石の数をカウント
             if self.field[y][x] == -1:
-                self.black += 1
-                self.white -= 1
-            else:
                 self.black -= 1
                 self.white += 1
+            else:
+                self.black += 1
+                self.white -= 1
             #石の色を反転
             self.field[y][x] *= -1
             return True
@@ -67,7 +71,7 @@ class Field():
 
     #指定された座標が正しいか（インデックスエラーにならないか）チェック
     def check_coor(self, y, x):
-        if 0 <= y <= 7 and 0 <= x <= 7:
+        if 0 <= y <= self.field_height-1 and 0 <= x <= self.field_width-1:
             return True
         return False
 
@@ -85,7 +89,7 @@ class Control():
         #反転させる石がある方向を調べる
         check_list = self.check_reverse(field, col, y, x)
         #反転させる石があれば石を設置、反転させる
-        if field.get_col(y, x) == 0 and sum(check_list):
+        if field.get_col(y, x) == 0 and sum(check_list) > 0:
             field.set_col(col, y, x)
             self.fill(field, check_list, col, y, x)
             return True
@@ -94,7 +98,7 @@ class Control():
 
     #反転させる石がある方向を調べる
     def check_reverse(self, field, col, y, x):
-        check_list = [0 for i in range(9)]
+        check_list = [0 for i in range(len(self.vector))]
 
         for i in range(len(self.vector)):
             coor = [y, x]
@@ -106,6 +110,9 @@ class Control():
             
             temp = self.calc.plus(temp, self.vector[i])
             while field.check_coor(temp[0], temp[1]):
+                stdscr.move(25, 0)
+                stdscr.addstr(' '.join([str(i) for i in temp]))
+                stdscr.refresh()
                 if col*field.get_col(temp[0], temp[1]) == 1:
                     check_list[i] = 1
                     break
@@ -128,16 +135,16 @@ class Control():
 
     #ゲームが終了するか調べる
     def endgame(self, field):
-        for i in range(8):
-            for j in range(8):
+        for i in range(field.field_height):
+            for j in range(field.field_width):
                 if field.get_col(i, j) == 0:
                     return False
         return True
 
     #プレイヤーの置く場所があるかチェック
     def check_set(self, field, col):
-        for i in range(8):
-            for j in range(8):
+        for i in range(field.field_height):
+            for j in range(field.field_width):
                 if field.get_col(i, j) != 0:
                     continue
                 if sum(self.check_reverse(field, col, i, j)) > 0:
@@ -151,8 +158,8 @@ class Display():
         self.turn_list = ['黒', '白']
 
     def show(self, field, cursor, turn):
-        for i in range(8):
-            for j in range(8):
+        for i in range(field.field_height):
+            for j in range(field.field_width):
                 stdscr.move(2*i, 4*j)
                 stdscr.addch(self.symbol[field.get_col(i, j)+1])
 
@@ -167,6 +174,7 @@ class Display():
 class Player():
     def __init__(self, is_human=True):
         self.is_human = is_human
+        self.que = list()
 
     def getkey(self, field, col):
         if self.is_human:
@@ -187,6 +195,54 @@ class Player():
                 return 'q'
             else:
                 return None
+        else:
+            if len(self.que) != 0:
+                stdscr.move(26, 0)
+                stdscr.addstr(' '.join(self.que))
+                stdscr.refresh()
+                #time.sleep(5)
+                return self.que.pop()
+            else:
+                self.que = self.cpu(field, col)
+                return self.que.pop()
+
+    def cpu(self, field, col):
+        evaluate_list = self.evaluate(field, col)
+
+        index = evaluate_list.index(max(evaluate_list))
+        stdscr.move(27, 0)
+        stdscr.addstr(' '.join([str(i) for i in evaluate_list]))
+        stdscr.refresh()
+        
+        y, x = int(index/field.field_height), index%field.field_height
+
+        move = ['d' for i in range(y)]
+        for i in range(x):
+            move.append('r')
+        move.append('e')
+        move.reverse()
+
+        return move
+    
+    def evaluate(self, field, col):
+        evaluate_list = [0 for i in range(field.field_height*field.field_width)]
+        
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                field_temp = copy.deepcopy(field)
+                
+                if field.get_col(i, j) != 0 or not control.set_stone(field_temp, col, i, j):
+                    evaluate_list[i*field.field_height + j] = -1
+                    continue
+                if col == -1:
+                    evaluate_list[i*field.field_height + j] = field_temp.get_black() - field.get_black()
+                elif col == 1:
+                    evaluate_list[i*field.field_height + j] = field_temp.get_white() - field.get_white()
+
+                if [i, j] in [[0, 0], [0, 7], [7, 0], [7, 7]]:
+                    evaluate_list[i*field.field_height + j] += 100
+
+        return evaluate_list
 
 class Math():
     def __init__(self):
@@ -226,7 +282,7 @@ if __name__ == '__main__':
     control = Control()
     #Displayクラスのインスタンス生成
     display = Display()
-    player = [Player(), Player()]
+    player = [Player(), Player(False)]
 
     turn = 0
     #カーソルの座標
@@ -235,15 +291,15 @@ if __name__ == '__main__':
     display.show(field, coor, turn)
 
     while not control.endgame(field):
+        stdscr.refresh()
+        #stdscr.move(21, 0)
+        #stdscr.addstr('check')
         if not control.check_set(field, turn*2 - 1):
             turn = (turn + 1) % 2
             continue
         display.show(field, coor, turn)
+        stdscr.refresh()
         key = player[turn].getkey(field, turn*2 - 1)
-        stdscr.move(18, 0)
-        stdscr.addstr(str(key))
-        stdscr.move(19, 0)
-        stdscr.addstr(str(coor[0])+str(coor[1]))
         if key == 'u':
             if coor[0] == 0:
                 continue
@@ -263,6 +319,8 @@ if __name__ == '__main__':
         elif key == 'e':
             if control.set_stone(field, turn*2 - 1, coor[0], coor[1]):
                 turn = (turn + 1) % 2
+                coor[0] = 0
+                coor[1] = 0
         elif key == 'q':
             break
 
