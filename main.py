@@ -183,6 +183,8 @@ class Player():
                 return 'r'
             elif temp == 10:
                 return 'e'
+            elif temp == 113:
+                return 'q'
             else:
                 return None
 
@@ -261,6 +263,8 @@ if __name__ == '__main__':
         elif key == 'e':
             if control.set_stone(field, turn*2 - 1, coor[0], coor[1]):
                 turn = (turn + 1) % 2
+        elif key == 'q':
+            break
 
 
     display.show(field, coor, turn)
