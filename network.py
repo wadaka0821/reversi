@@ -1,11 +1,12 @@
 import numpy as np
+import csv
 
 class Network():
     def __init__(self):
         self.w_1 = np.zeros((65, 20))
         self.w_2 = np.zeros((21, 64))
 
-        self.init_param(10)
+        self.init_param(5)
 
     def init_param(self, sigma):
         for i in range(len(self.w_1)):
@@ -29,6 +30,22 @@ class Network():
 
     def sigmoid(self, a):
         return 1. / (1. + np.exp(-a))
+
+    def load(self, filename):
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            size = self.w_1.shape
+            for i in range(size[0]):
+                buffer = next(reader)
+                for j in range(size[1]):
+                    self.w_1[i][j] = buffer[j]
+            
+            size = self.w_2.shape
+            for i in range(size[0]):
+                buffer = next(reader)
+                for j in range(size[1]):
+                    self.w_2[i][j] = buffer[j]
+
 
 if __name__ == '__main__':
     net = Network()

@@ -1,6 +1,10 @@
 import curses
 import copy
 import time
+from network import Network
+
+#初期化
+stdscr = curses.initscr()
 
 #盤面情報の管理
 class Field():
@@ -172,12 +176,14 @@ class Display():
 
 
 class Player():
-    def __init__(self, is_human=True):
-        self.is_human = is_human
+    def __init__(self, mode="human", model=None):
+        self.mode = mode
+        self.control = Control()
         self.que = list()
+        self.model = model
 
     def getkey(self, field, col):
-        if self.is_human:
+        if self.mode == 'human':
             temp = stdscr.getch()
             stdscr.move(17, 0)
             stdscr.addstr(str(temp))
@@ -195,7 +201,7 @@ class Player():
                 return 'q'
             else:
                 return None
-        else:
+        elif self.mode == 'cpu1':
             if len(self.que) != 0:
                 stdscr.move(26, 0)
                 stdscr.addstr(' '.join(self.que))
@@ -205,15 +211,46 @@ class Player():
             else:
                 self.que = self.cpu(field, col)
                 return self.que.pop()
+        elif self.mode == 'cpu2':
+            if len(self.que) != 0:
+                stdscr.move(26, 0)
+                stdscr.addstr(' '.join(self.que))
+                stdscr.refresh()
+                return self.que.pop()
+            else:
+                self.que = self.cpu2(field, col)
+                return self.que.pop()
 
     def cpu(self, field, col):
         evaluate_list = self.evaluate(field, col)
 
         index = evaluate_list.index(max(evaluate_list))
-        stdscr.move(27, 0)
-        stdscr.addstr(' '.join([str(i) for i in evaluate_list]))
-        stdscr.refresh()
         
+        y, x = int(index/field.field_height), index%field.field_height
+
+        move = ['d' for i in range(y)]
+        for i in range(x):
+            move.append('r')
+        move.append('e')
+        move.reverse()
+
+        return move
+
+    def cpu2(self, field, col):
+        x = [field.get_col(y, x)*col for y in range(field.field_height) for x in range(field.field_width)]
+        evaluate_list = self.model.feedforward(x)
+
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                field_temp = copy.deepcopy(field)
+
+                if field.get_col(i, j) != 0 or not self.control.set_stone(field_temp, col, i, j):
+                    evaluate_list[i*field.field_height + j] = -float('inf')
+
+        evaluate_list = evaluate_list.tolist()
+                    
+        index = evaluate_list.index(max(evaluate_list))
+
         y, x = int(index/field.field_height), index%field.field_height
 
         move = ['d' for i in range(y)]
@@ -231,8 +268,8 @@ class Player():
             for j in range(field.field_width):
                 field_temp = copy.deepcopy(field)
                 
-                if field.get_col(i, j) != 0 or not control.set_stone(field_temp, col, i, j):
-                    evaluate_list[i*field.field_height + j] = -1
+                if field.get_col(i, j) != 0 or not self.control.set_stone(field_temp, col, i, j):
+                    evaluate_list[i*field.field_height + j] = -float('inf')
                     continue
                 if col == -1:
                     evaluate_list[i*field.field_height + j] = field_temp.get_black() - field.get_black()
@@ -266,9 +303,7 @@ class Math():
     def minus(self, li1, li2):
         return self.plus(li1, self.scalar(li2, -1))
 
-if __name__ == '__main__':
-    #初期化
-    stdscr = curses.initscr()
+def game(player1, player2, result=None):
     #入力キーのリピートをオフ
     curses.noecho()
     #キー入力後すぐに反応するように設定
@@ -282,24 +317,35 @@ if __name__ == '__main__':
     control = Control()
     #Displayクラスのインスタンス生成
     display = Display()
-    player = [Player(False), Player(False)]
+    player = list()
+    if isinstance(player1, Network):
+        player.append(Player(mode='cpu2', model=player1))
+    else:
+        player.append(Player(mode=player1))
+    if isinstance(player2, Network):
+        player.append(Player(mode='cpu2', model=player2))
+    else:
+        player.append(Player(mode=player2))
 
     turn = 0
+    end = 0
     #カーソルの座標
     coor = [0, 0]
 
     display.show(field, coor, turn)
 
     while not control.endgame(field):
+        if end == 2:
+            break
         stdscr.refresh()
-        #stdscr.move(21, 0)
-        #stdscr.addstr('check')
         if not control.check_set(field, turn*2 - 1):
+            end += 1
             turn = (turn + 1) % 2
             continue
         display.show(field, coor, turn)
         stdscr.refresh()
         key = player[turn].getkey(field, turn*2 - 1)
+        end = 0
         if key == 'u':
             if coor[0] == 0:
                 continue
@@ -336,3 +382,17 @@ if __name__ == '__main__':
     curses.echo()
     #終了
     curses.endwin()
+
+    result.append(field.get_black())
+    result.append(field.get_white())
+
+    return field.get_black() < field.get_white()
+
+if __name__ == '__main__':
+    net = Network()
+    net.load('parameters.csv')
+    result = list()
+    game('human', net, result)
+
+    with open('result2.txt', 'w') as f:
+        f.write('player:'+str(result[0])+' cpu2(net):'+str(result[1]))
