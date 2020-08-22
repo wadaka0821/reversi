@@ -7,8 +7,8 @@ from network import Network
 
 class Train():
     def __init__(self):
-        self.num = 10
-        self.generation = 0
+        self.num = 100
+        self.generation = 1
         self.models_1 = [Network() for i in range(self.num)]
         self.models_2 = [Network() for i in range(self.num)]
         self.parents = list()
@@ -16,8 +16,8 @@ class Train():
     def vs(self):
         model_temp = list()
         for i in range(self.num):
-            result = game(self.models_1[i], self.models_2[i])
-            if result == 0:
+            result = game(self.models_1[i], self.models_2[i], info=[self.generation, i+1])
+            if result:
                 model_temp.append(copy.deepcopy(self.models_1[i]))
             else:
                 model_temp.append(copy.deepcopy(self.models_2[i]))
@@ -31,6 +31,7 @@ class Train():
             self.models_1.append(Network())
             self.models_1[-1].w_1 = model_temp[index1].w_1*a_1 + model_temp[index2].w_1*(1.-a_1)
             self.models_1[-1].w_2 = model_temp[index1].w_2*a_1 + model_temp[index2].w_2*(1.-a_1)
+            #self.models_1[-1].w_3 = model_temp[index1].w_3*a_1 + model_temp[index2].w_3*(1.-a_1)
 
             index1, index2 = np.random.randint(0, self.num), np.random.randint(0, self.num)
             a_1 = np.random.rand()
@@ -38,6 +39,7 @@ class Train():
             self.models_2.append(Network())
             self.models_2[-1].w_1 = model_temp[index1].w_1*a_1 + model_temp[index2].w_1*(1.-a_1)
             self.models_2[-1].w_2 = model_temp[index1].w_2*a_1 + model_temp[index2].w_2*(1.-a_1)
+            #self.models_2[-1].w_3 = model_temp[index1].w_3*a_1 + model_temp[index2].w_3*(1.-a_1)
 
     def resset(self):
         for i in range(self.num):
@@ -50,12 +52,13 @@ class Train():
             self.generation += 1
 
     def save(self, index, model=1):
-        with open('parameters.csv', 'w') as f:
+        with open('parameters_.csv', 'w') as f:
             writer = csv.writer(f)
             writer.writerows(self.models_1[index].w_1)
             writer.writerows(self.models_1[index].w_2)
+            #writer.writerows(self.models_1[index].w_3)
 
 if __name__ == '__main__':
     t = Train()
-    t.train(10)
+    t.train(100)
     t.save(0)

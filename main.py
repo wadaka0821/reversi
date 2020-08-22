@@ -1,6 +1,8 @@
 import curses
 import copy
 import time
+import numpy as np
+import csv
 from network import Network
 
 #初期化
@@ -114,14 +116,14 @@ class Control():
             
             temp = self.calc.plus(temp, self.vector[i])
             while field.check_coor(temp[0], temp[1]):
-                stdscr.move(25, 0)
-                stdscr.addstr(' '.join([str(i) for i in temp]))
-                stdscr.refresh()
+                if field.get_col(temp[0], temp[1]) == 0:
+                    break
                 if col*field.get_col(temp[0], temp[1]) == 1:
                     check_list[i] = 1
                     break
                 else:
                     temp = self.calc.plus(temp, self.vector[i])
+            del temp
 
         return check_list
 
@@ -136,6 +138,7 @@ class Control():
             while col*field.get_col(temp[0], temp[1]) == -1:
                 field.reverse_col(temp[0], temp[1])
                 temp = self.calc.plus(temp, self.vector[i])
+            del temp
 
     #ゲームが終了するか調べる
     def endgame(self, field):
@@ -185,8 +188,6 @@ class Player():
     def getkey(self, field, col):
         if self.mode == 'human':
             temp = stdscr.getch()
-            stdscr.move(17, 0)
-            stdscr.addstr(str(temp))
             if temp == curses.KEY_UP:
                 return 'u'
             elif temp == curses.KEY_DOWN:
@@ -203,9 +204,6 @@ class Player():
                 return None
         elif self.mode == 'cpu1':
             if len(self.que) != 0:
-                stdscr.move(26, 0)
-                stdscr.addstr(' '.join(self.que))
-                stdscr.refresh()
                 #time.sleep(1)
                 return self.que.pop()
             else:
@@ -213,9 +211,6 @@ class Player():
                 return self.que.pop()
         elif self.mode == 'cpu2':
             if len(self.que) != 0:
-                stdscr.move(26, 0)
-                stdscr.addstr(' '.join(self.que))
-                stdscr.refresh()
                 return self.que.pop()
             else:
                 self.que = self.cpu2(field, col)
@@ -235,9 +230,56 @@ class Player():
         move.reverse()
 
         return move
+    
+    def feature(self, field, col):
+        x = list()
+
+        #特徴量抽出
+        temp = 0
+        if field.get_col(0, 0) == col:
+            temp += 1
+        if field.get_col(0, 7) == col:
+            temp += 1
+        if field.get_col(7, 0) == col:
+            temp += 1
+        if field.get_col(7, 7) == col:
+            temp += 1
+        x.append(temp)
+        temp = 0
+        if field.get_col(0, 0) == -col:
+            temp += 1
+        if field.get_col(0, 7) == -col:
+            temp += 1
+        if field.get_col(7, 0) == -col:
+            temp += 1
+        if field.get_col(7, 7) == -col:
+            temp += 1
+        x.append(temp)
+
+        if col == -1:
+            x.append(field.get_black() - field.get_white())
+        else:
+            x.append(field.get_white() - field.get_black())
+
+        temp = 0
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                if field.get_col(i, j) == 0:
+                    temp += 1
+        x.append(temp)
+
+        x.append(col*(field.get_col(3, 3)+field.get_col(4, 3)+field.get_col(3, 4)+field.get_col(4, 4)))
+
+        return x
 
     def cpu2(self, field, col):
-        x = [field.get_col(y, x)*col for y in range(field.field_height) for x in range(field.field_width)]
+
+        '''
+        x = list()
+        if col == -1:
+            x = [field.get_col(y, x)*-1 for y in range(field.field_height) for x in range(field.field_width)]
+        else:
+            x = [field.get_col(y, x) for y in range(field.field_height) for x in range(field.field_width)]
         evaluate_list = self.model.feedforward(x)
 
         for i in range(field.field_height):
@@ -246,8 +288,21 @@ class Player():
 
                 if field.get_col(i, j) != 0 or not self.control.set_stone(field_temp, col, i, j):
                     evaluate_list[i*field.field_height + j] = -float('inf')
+        '''
 
-        evaluate_list = evaluate_list.tolist()
+        evaluate_list = list()
+
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                field_temp = copy.deepcopy(field)
+
+                if field.get_col(i, j) != 0 or not self.control.set_stone(field_temp, col, i, j):
+                    evaluate_list.append(-float('inf'))
+                else:
+                    x = self.feature(field_temp, col)
+                    evaluate_list.append(self.model.feedforward(x)[0])
+
+        #evaluate_list = evaluate_list.tolist()
                     
         index = evaluate_list.index(max(evaluate_list))
 
@@ -303,13 +358,20 @@ class Math():
     def minus(self, li1, li2):
         return self.plus(li1, self.scalar(li2, -1))
 
-def game(player1, player2, result=None):
+def game(player1, player2, result=None, info=None):
     #入力キーのリピートをオフ
     curses.noecho()
     #キー入力後すぐに反応するように設定
     curses.cbreak()
     #キーパッドモードをオン
     stdscr.keypad(True)
+    
+    #情報表示
+    if info != None:
+        stdscr.move(23, 0)
+        stdscr.addstr('generation:'+str(info[0])+' battle:'+str(info[1]))
+        stdscr.refresh()
+    
 
     #Fieldクラスのインスタンス生成
     field = Field()
@@ -374,7 +436,7 @@ def game(player1, player2, result=None):
     display.show(field, coor, turn)
     stdscr.refresh()
 
-    time.sleep(5)
+    #time.sleep(10)
 
     #設定をもとに戻す
     curses.nocbreak()
@@ -383,16 +445,17 @@ def game(player1, player2, result=None):
     #終了
     curses.endwin()
 
-    result.append(field.get_black())
-    result.append(field.get_white())
+    if result != None:
+        result.append(field.get_black())
+        result.append(field.get_white())
 
-    return field.get_black() < field.get_white()
+    return field.get_black() > field.get_white()
 
 if __name__ == '__main__':
     net = Network()
-    net.load('parameters.csv')
+    net.load('parameters_.csv')
     result = list()
-    game('human', net, result)
+    game(net, 'cpu1', result)
 
-    with open('result2.txt', 'w') as f:
-        f.write('player:'+str(result[0])+' cpu2(net):'+str(result[1]))
+    with open('result3_.txt', 'w') as f:
+        f.write('player1:'+str(result[0])+' player2:'+str(result[1]))
