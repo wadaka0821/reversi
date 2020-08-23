@@ -1,1 +1,1 @@
-player:20 cpu2(net):44
+player1:15 player2:49

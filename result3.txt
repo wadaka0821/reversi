@@ -1,1 +1,1 @@
-player1:42 player2:22
+player1:39 player2:25

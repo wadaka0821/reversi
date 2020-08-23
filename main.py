@@ -202,12 +202,18 @@ class Player():
                 return 'q'
             else:
                 return None
+        elif self.mode == 'cpu0':
+            if len(self.que) != 0:
+                return self.que.pop()
+            else:
+                self.que = self.cpu0(field, col)
+                return self.que.pop()
         elif self.mode == 'cpu1':
             if len(self.que) != 0:
                 #time.sleep(1)
                 return self.que.pop()
             else:
-                self.que = self.cpu(field, col)
+                self.que = self.cpu1(field, col)
                 return self.que.pop()
         elif self.mode == 'cpu2':
             if len(self.que) != 0:
@@ -215,8 +221,37 @@ class Player():
             else:
                 self.que = self.cpu2(field, col)
                 return self.que.pop()
+        elif self.mode == 'cpu2_random':
+            if len(self.que) != 0:
+                return self.que.pop()
+            else:
+                self.que = self.cpu2_random(field, col)
+                return self.que.pop()
+    
+    def cpu0(self, field, col):
+        evaluate_list = list()
 
-    def cpu(self, field, col):
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                field_temp = copy.deepcopy(field)
+                if field.get_col(i, j) != 0 or not self.control.set_stone(field_temp, col, i, j):
+                    evaluate_list.append(-float('inf'))
+                else:
+                    evaluate_list.append(np.random.rand())
+
+        index = evaluate_list.index(max(evaluate_list))
+        
+        y, x = int(index/field.field_height), index%field.field_height
+
+        move = ['d' for i in range(y)]
+        for i in range(x):
+            move.append('r')
+        move.append('e')
+        move.reverse()
+
+        return move
+
+    def cpu1(self, field, col):
         evaluate_list = self.evaluate(field, col)
 
         index = evaluate_list.index(max(evaluate_list))
@@ -270,6 +305,48 @@ class Player():
 
         x.append(col*(field.get_col(3, 3)+field.get_col(4, 3)+field.get_col(3, 4)+field.get_col(4, 4)))
 
+        temp = 0
+        for i in range(1, field.field_width-1):
+            if field.get_col(1, i) == col:
+                temp += 1
+            if field.get_col(6, i) == col:
+                temp += 1
+        for i in range(2, 5):
+            if field.get_col(i, 1) == col:
+                temp += 1
+            if field.get_col(i, 6) == col:
+                temp += 1
+        x.append(temp)
+
+        temp = 0
+        for i in range(1, field.field_width-1):
+            if field.get_col(1, i) == -col:
+                temp += 1
+            if field.get_col(6, i) == -col:
+                temp += 1
+        for i in range(2, 5):
+            if field.get_col(i, 1) == -col:
+                temp += 1
+            if field.get_col(i, 6) == -col:
+                temp += 1
+        x.append(temp)
+
+        temp = 0
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                field_temp = copy.deepcopy(field)
+                if field_temp.get_col(i, j) == 0 and self.control.set_stone(field_temp, col, i, j):
+                    temp += 1
+        x.append(temp)
+
+        temp = 0
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                field_temp = copy.deepcopy(field)
+                if field_temp.get_col(i, j) == 0 and self.control.set_stone(field_temp, -col, i, j):
+                    temp += 1
+        x.append(temp)
+
         return x
 
     def cpu2(self, field, col):
@@ -315,6 +392,61 @@ class Player():
         move.reverse()
 
         return move
+
+    def cpu2_random(self, field, col):
+        evaluate_list = list()
+        mini = float('inf')
+
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                field_temp = copy.deepcopy(field)
+
+                if field.get_col(i, j) != 0 or not self.control.set_stone(field_temp, col, i, j):
+                    evaluate_list.append(-float('inf'))
+                else:
+                    x = self.feature(field_temp, col)
+                    evaluate_list.append(self.model.feedforward(x)[0])
+                    if mini > evaluate_list[-1]:
+                        mini = evaluate_list[-1]
+        
+        if mini < 0:
+            for i in range(len(evaluate_list)):
+                evaluate_list[i] -= mini
+
+        
+        Z = 0
+        for i in evaluate_list:
+            if i >= 0:
+                Z += i
+
+        y, x = 0, 0
+        
+        r = np.random.rand()
+        s = 0
+        f = False
+        for i in range(field.field_height):
+            for j in range(field.field_width):
+                if evaluate_list[i*field.field_height + j] >= 0:
+                    if Z == 0:
+                        y, x = i, j
+                        f = True
+                        break
+                    s += evaluate_list[i*field.field_height + j] / Z
+                    if r < s:
+                        y, x = i, j
+                        f = True
+                        break
+            if f:
+                break
+
+        move = ['d' for i in range(y)]
+        for i in range(x):
+            move.append('r')
+        move.append('e')
+        move.reverse()
+
+        return move
+
     
     def evaluate(self, field, col):
         evaluate_list = [0 for i in range(field.field_height*field.field_width)]
@@ -381,11 +513,11 @@ def game(player1, player2, result=None, info=None):
     display = Display()
     player = list()
     if isinstance(player1, Network):
-        player.append(Player(mode='cpu2', model=player1))
+        player.append(Player(mode='cpu2_random', model=player1))
     else:
         player.append(Player(mode=player1))
     if isinstance(player2, Network):
-        player.append(Player(mode='cpu2', model=player2))
+        player.append(Player(mode='cpu2_random', model=player2))
     else:
         player.append(Player(mode=player2))
 
@@ -452,10 +584,28 @@ def game(player1, player2, result=None, info=None):
     return field.get_black() > field.get_white()
 
 if __name__ == '__main__':
-    net = Network()
-    net.load('parameters_.csv')
+    net1 = Network()
+    net2 = Network()
+    net1.load('params_rand/params_rand(125).csv')
+    net2.load('params_rand/params_rand(150).csv')
     result = list()
-    game(net, 'cpu1', result)
+    won = 0
+    
+    game(net1, net2,  result)
+    with open('result.txt', 'a') as f:
+        f.write(str(result[0])+', '+str(result[1])+'\n')
 
-    with open('result3_.txt', 'w') as f:
-        f.write('player1:'+str(result[0])+' player2:'+str(result[1]))
+    '''
+    for i in range(100):
+        result = list()
+        game(net2, 'cpu0', result)
+        with open('net_random2.csv', 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow(result)
+        if result[0] > result[1]:
+            won += 1
+    
+    '''
+    print(won)
+
+    
